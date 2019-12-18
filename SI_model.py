@@ -1,8 +1,11 @@
 import networkx as nx
 import numpy as np 
+import scipy.stats as sp
 import matplotlib.pyplot as plt
 import pandas as pd
 import si_animator  
+from sklearn.preprocessing import minmax_scale
+
 
 
 #read data
@@ -168,7 +171,59 @@ def task3():
 
     plt.show()
 
+#-------------------- Task 3 --------------------#
+def task4():
+    print("start infecting")
 
+    p = 0.5
+    iter = 50
+    node_infected_t = {}
+    median = {}
+    for i in range(iter):
+        n = int(np.random.randint(0,279))
+        infection_times = SI_model(n,p)
+        for key, value in infection_times.items():
+            if key not in node_infected_t:
+                node_infected_t[key] = [value]
+            else:
+                node_infected_t[key].append(value)
+    for key, value in node_infected_t.items():
+        median[key] = np.median(value)
+        
+    print(median[0])
+    print("infecting finished")
+
+    #Visualization
+    nodal_measures = {
+        'unweighted clustering coefficient c': nx.clustering(G),
+        'degree k': dict(G.degree()),
+        'strength s': G.degree(weight='weight'),
+        'unweighted betweenness centrality': nx.betweenness_centrality(G),
+    }
+
+    spearmanr_ls = []
+
+    for i, (title, info) in enumerate(nodal_measures.items()):
+        nodes = list(G.nodes())
+        x = [info[node] for node in nodes]
+        y = [median[int(node)] for node in nodes]
+        rho = sp.stats.spearmanr(x, y).correlation
+        spearmanr_ls.append((title, rho))
+    
+        # normalized
+        #x = minmax_scale(x)
+        x, y = minmax_scale(x), minmax_scale(y)
+        plt.figure(figsize=(10,6))
+        plt.xlabel(f'{title} (Normalized)')
+        plt.ylabel('Median Infection time (Normalized)')
+        plt.scatter(x, y)
+        plt.title(f'Infect time vs {title} (normalized)\n Spearman r:{rho}')
+    
+        plt.savefig(f'result/{title}')
+        plt.show()
+    
+    for measure, rho in spearmanr_ls:
+        print(f'{measure}: {rho}')
 #Visualization
 # si_animator.visualize_si(
 #         infection_times_a,
@@ -190,4 +245,5 @@ timestamps = np.linspace(min_t, max_t, steps)
 # main 
 #task1()
 #task2()
-task3()
+# task3()
+task4()

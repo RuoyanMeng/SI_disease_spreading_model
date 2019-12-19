@@ -10,9 +10,11 @@ from sklearn.preprocessing import minmax_scale
 
 #read data
 fh = "aggregated_US_air_traffic_network_undir.edg"
-G=nx.read_weighted_edgelist(fh)
+G=nx.read_weighted_edgelist(fh, nodetype=int)
 nodes_n = G.number_of_nodes()
 nodes = list(G.nodes())
+
+# print(G.edges)
 
 ft = "events_US_air_traffic_GMT.txt"
 f = open(ft,'r')
@@ -39,7 +41,7 @@ def SI_model(n,p, immunized=[]):
     
     infection_times={}
     infection_times[n] = float(air_traffic_GMT_sorted[0][2])
-    
+
     for val in air_traffic_GMT_sorted:
         source_node = int(val[0])
         destination_node = int(val[1])
@@ -50,40 +52,58 @@ def SI_model(n,p, immunized=[]):
             if destination_node in infection_times:
                 if arrival_t < infection_times[destination_node] and departure_t>infection_times[source_node]:
                     infection_times[destination_node] = arrival_t
-                    #if destination_node == 41:
-                        # print(infection_times[destination_node]," : update")
+
+                 
             else:
                 if destination_node not in immunized and np.random.rand() < p and departure_t>infection_times[source_node] :
                     infection_times[destination_node] = arrival_t
-                    #if destination_node == 41:
-                        # print(infection_times[destination_node])
-    # print(infection_times , "????")
+                    if source_node == 41:
+                        print(destination_node)
+                
 
     return infection_times
 
-# array store
-def SI_model_a(n,p):
-    infection_times= np.zeros(nodes_n)
-    infection_times[n] = float(air_traffic_GMT_sorted[0][2])
+def SI_model_links(n,p, g_links, immunized=[]):
     
-    x = 0
+    infection_times={}
+    infection_times[n] = float(air_traffic_GMT_sorted[0][2])
+
     for val in air_traffic_GMT_sorted:
         source_node = int(val[0])
         destination_node = int(val[1])
         arrival_t = float(val[3])
-        if infection_times[source_node] != 0:
-            if infection_times[destination_node] !=0:
-                if arrival_t < infection_times[destination_node]:
-                    infection_times[destination_node] = arrival_t
-                    #if destination_node == 41:
-                        # print(infection_times[destination_node]," : update")
-            else:
-                if(np.random.rand() < p) :
-                    infection_times[destination_node] = arrival_t
-                    #if destination_node == 41:
-                        # print(infection_times[destination_node])
+        departure_t = float(val[2])
 
-    return infection_times
+        if source_node in infection_times:
+        
+            if destination_node in infection_times:
+                if arrival_t < infection_times[destination_node] and departure_t>infection_times[source_node]:
+                    infection_times[destination_node] = arrival_t
+
+                #     if g_links.has_edge(source_node,destination_node):
+                #         g_links[source_node][destination_node]['weight']+=1
+                #     else:
+                #         g_links.add_edge(source_node,destination_node,weight=1)
+                # elif arrival_t >= infection_times[destination_node] and departure_t>infection_times[source_node]:
+                #     if g_links.has_edge(source_node,destination_node):
+                #         g_links[source_node][destination_node]['weight']+=1
+                #     else:
+                #         g_links.add_edge(source_node,destination_node,weight=1)
+
+            else:
+                if destination_node not in immunized and np.random.rand() < p and departure_t>infection_times[source_node] :
+                    infection_times[destination_node] = arrival_t
+                    if g_links.has_edge(source_node,destination_node):
+                        g_links[source_node][destination_node]['weight']+=1
+                    else:
+                        g_links.add_edge(source_node,destination_node,weight=1)
+                        #print("hello", source_node, destination_node)
+                    # if source_node == 41:
+                    #     print(destination_node)
+                        
+                
+    return g_links
+
 
 # prevalence 
 def prevalence(n ,p, iter = 10, multi_n = False, immunized = [], n_multi=[]):
@@ -110,7 +130,7 @@ def prevalence(n ,p, iter = 10, multi_n = False, immunized = [], n_multi=[]):
 #-------------------- Task 1 --------------------#
 def task1():
     print("start infecting")
-    infection_times = SI_model(53,0.5)
+    infection_times = SI_model(0,1)
     # infection_times_a = SI_model_a(0,1)
     print("infecting finished")
 
@@ -292,15 +312,140 @@ def task5():
     plt.show()
 
 
-#Visualization
-# si_animator.visualize_si(
-#         infection_times_a,
-#         save_fname="si_viz_example.gif",
-#         tot_viz_time_in_seconds=10,
-#         fps=10)
+#-------------------- Task 6 --------------------#
+#link graph
+def task6():
+    iter = 20
+    p = 0.5
+
+    seed_nodes = list(map(int, np.random.choice(nodes, iter)))
+
+    # transmission_count = {edge: 0 for edge in G.edges}
+    g_links = nx.Graph()
+    node = range(0,279)
+    g_links.add_nodes_from(node)
+
+    for n in seed_nodes:
+        g_links = SI_model_links(n, p, g_links)
+        print("kkkkk")
+
+
+    weights = nx.get_edge_attributes(g_links,'weight')
+    edges = list(g_links.edges())
+
+    print(len(weights),"weights", len(edges), "edges")
 
 
 
+    # Visualization
+    airport = pd.read_csv('US_airport_id_info.csv')
+    airport.head()
+    xycoords = {airport.id[index]:
+        (airport.xcoordviz[index],airport.ycoordviz[index])
+        for index in airport.index}
+    widths = [v/(iter) for v in weights.values()]
+    # widths = [n/max(widths) for n in widths]
+    print(widths)
+
+    si_animator.plot_network_usa(g_links, xycoords, edges=edges, linewidths=widths)
+    plt.title("Transmission Links")
+    plt.savefig('result/plot_network_usa.png')
+    plt.show()
+
+    mst = nx.maximum_spanning_tree(g_links)
+    mst_edges = list(mst.edges)
+    si_animator.plot_network_usa(mst, xycoords, 
+                 mst_edges, [1 for _ in mst_edges])
+    plt.savefig('result/plot_mst.png')
+
+
+# def load_data():
+#     event_data = pd.read_csv('events_US_air_traffic_GMT.txt', sep=' ')
+#     event_data = event_data.sort_values(by=['StartTime', 'EndTime'], ascending=[True, True])
+#     event_data['Source'] = event_data['Source'].astype(str)
+#     event_data['Destination'] = event_data['Destination'].astype(str)
+#     return event_data.reset_index(drop=True)
+
+# def load_and_init_graph(nodes='0'):
+#     graph = nx.read_weighted_edgelist('./aggregated_US_air_traffic_network_undir.edg')
+    
+#     infection_times = {node: float('inf') for node in graph.nodes()}
+#     nx.set_node_attributes(graph, infection_times, 'infection_time')
+    
+#     if type(nodes) == str:
+#         assert graph.has_node(nodes)
+#         # first node to be infected
+#         graph.nodes[nodes]['infection_time'] = min(event_data['StartTime'])
+        
+#     elif type(nodes) in [list, np.ndarray]:
+#         for node in nodes:
+#             assert graph.has_node(node)
+            
+#         for node in nodes:
+#             graph.nodes[node]['infection_time'] = min(event_data['StartTime'])
+            
+#     return graph
+
+
+
+# def simulate_infection_2(p=1, seed_nodes='0', immune_nodes=[]):
+#     # tracks edge
+#     # init
+#     event_data = load_data()
+#     graph = load_and_init_graph(seed_nodes)
+#     nx.set_edge_attributes(graph, {edge: None for edge in graph.edges}, 'infection_from')
+    
+#     for index in event_data.index:
+#         row = event_data.iloc[index]
+#         source, destination, start, end, duration = tuple(row)
+        
+#         # if source or destination is immune, no transmission
+#         if source in immune_nodes or destination in immune_nodes:
+#             continue
+        
+#         if (start >= graph.nodes[source]['infection_time']) and (np.random.rand() <= p):
+#             # only update if new infection time is smaller than target nodes infection time
+#             if end < graph.nodes[destination]['infection_time']:
+#                 graph.nodes[destination]['infection_time'] = end # update
+                
+#                 # infect an uninfected airport
+#                 graph.get_edge_data(source, destination)['infection_from'] = source
+                
+#     return graph
+
+
+
+
+# def task6():
+#     p = 0.5
+#     seed_nodes = np.random.choice(nodes, 20)
+#     transmission_count = {edge: 0 for edge in G.edges}
+#     # Run 20 simulations using random nodes as seeds and p = 0.5. 
+#     # For each simulation, record which links are used to infect yet uninfected airports.
+#     for i, seed in enumerate(seed_nodes):
+#         if i%5==0:
+#             print(f'{i}/{len(seed_nodes)}')
+        
+#         graph = simulate_infection_2(p, seed_nodes=str(seed), immune_nodes=[])
+    
+#         for edge, source in nx.get_edge_attributes(graph, 'infection_from').items():
+#             if source != None:
+#                 transmission_count[edge] += 1
+
+#     airport = pd.read_csv('US_airport_id_info.csv')
+#     airport.head()
+
+#     xycoords = {str(airport.id[index]):
+#         (airport.xcoordviz[index],airport.ycoordviz[index])
+#         for index in airport.index}
+
+#     edges = list(graph.edges)
+
+#     widths = [transmission_count[edge]/20 for edge in edges]
+
+#     si_animator.plot_network_usa(graph, xycoords, edges=edges, linewidths=widths)
+#     plt.title("Transmission Links")
+#     plt.savefig('result/plot_network_usa.png')
 #-------------- main ------------#
 
 # timestamps
@@ -310,9 +455,16 @@ max_t = float(sorted(air_traffic_GMT, key = lambda x:(x[3]), reverse = True)[0][
 steps = 20
 timestamps = np.linspace(min_t, max_t, steps)
 
+
+# event_data = load_data()
+# event_data.head()
+
+# graph = load_and_init_graph()
+# graph.nodes['0']
 # main 
 #task1()
 #task2()
 #task3()
 #task4()
-task5()
+#task5()
+task6()

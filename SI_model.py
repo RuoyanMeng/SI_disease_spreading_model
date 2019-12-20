@@ -93,10 +93,11 @@ def SI_model_links(n,p, g_links, immunized=[]):
             else:
                 if destination_node not in immunized and np.random.rand() < p and departure_t>infection_times[source_node] :
                     infection_times[destination_node] = arrival_t
-                    if g_links.has_edge(source_node,destination_node):
-                        g_links[source_node][destination_node]['weight']+=1
-                    else:
-                        g_links.add_edge(source_node,destination_node,weight=1)
+                    g_links[source_node][destination_node]['weight']+=1
+                    # if g_links.has_edge(source_node,destination_node):
+                    #     g_links[source_node][destination_node]['weight']+=1
+                    # else:
+                    #     g_links.add_edge(source_node,destination_node,weight=1)
                         #print("hello", source_node, destination_node)
                     # if source_node == 41:
                     #     print(destination_node)
@@ -324,7 +325,8 @@ def task6():
     g_links = nx.Graph()
     node = range(0,279)
     g_links.add_nodes_from(node)
-
+    edges_ = list(G.edges())
+    g_links.add_edges_from(edges_,weight=0)
     for n in seed_nodes:
         g_links = SI_model_links(n, p, g_links)
         print("kkkkk")
@@ -345,107 +347,50 @@ def task6():
         for index in airport.index}
     widths = [v/(iter) for v in weights.values()]
     # widths = [n/max(widths) for n in widths]
-    print(widths)
+    # print(widths)
 
     si_animator.plot_network_usa(g_links, xycoords, edges=edges, linewidths=widths)
     plt.title("Transmission Links")
     plt.savefig('result/plot_network_usa.png')
-    plt.show()
-
+    # plt.show()
     mst = nx.maximum_spanning_tree(g_links)
     mst_edges = list(mst.edges)
     si_animator.plot_network_usa(mst, xycoords, 
                  mst_edges, [1 for _ in mst_edges])
     plt.savefig('result/plot_mst.png')
 
+    # scatter plots showing the fraction of times as a function of the following link properties
 
-# def load_data():
-#     event_data = pd.read_csv('events_US_air_traffic_GMT.txt', sep=' ')
-#     event_data = event_data.sort_values(by=['StartTime', 'EndTime'], ascending=[True, True])
-#     event_data['Source'] = event_data['Source'].astype(str)
-#     event_data['Destination'] = event_data['Destination'].astype(str)
-#     return event_data.reset_index(drop=True)
+    scatter_info = {
+        'weight': nx.get_edge_attributes(G, 'weight'),
+        'unweighted link betweenness centrality': nx.edge_betweenness_centrality(g_links)
+    }
 
-# def load_and_init_graph(nodes='0'):
-#     graph = nx.read_weighted_edgelist('./aggregated_US_air_traffic_network_undir.edg')
+    spearmanr_ls_links = []
+    for attribute, info in scatter_info.items():   
+        if attribute == 'weight':
+            x = minmax_scale([info[edge] for edge in edges_])
+        else:
+            x = minmax_scale([info[edge] for edge in edges])
+
+        # x = [info[edge] for edge in edges_]
+
+        y = widths
+        print(len(y),':y ', len(x),':x')
+        rho = sp.spearmanr(x, y).correlation
+        spearmanr_ls_links.append((attribute, rho))
     
-#     infection_times = {node: float('inf') for node in graph.nodes()}
-#     nx.set_node_attributes(graph, infection_times, 'infection_time')
+        plt.figure(figsize=(8,5))
+        plt.xlabel(f'{attribute} (normalized)')
+        plt.ylabel('Transmission fraction $f_{ij}$')
+        plt.scatter(x, y,alpha=0.9, s=30)
+        plt.title(f'Transmission fraction vs {attribute}')
+
+        plt.savefig(f'result/{attribute}')
+        plt.show()
     
-#     if type(nodes) == str:
-#         assert graph.has_node(nodes)
-#         # first node to be infected
-#         graph.nodes[nodes]['infection_time'] = min(event_data['StartTime'])
-        
-#     elif type(nodes) in [list, np.ndarray]:
-#         for node in nodes:
-#             assert graph.has_node(node)
-            
-#         for node in nodes:
-#             graph.nodes[node]['infection_time'] = min(event_data['StartTime'])
-            
-#     return graph
+    print(spearmanr_ls_links)
 
-
-
-# def simulate_infection_2(p=1, seed_nodes='0', immune_nodes=[]):
-#     # tracks edge
-#     # init
-#     event_data = load_data()
-#     graph = load_and_init_graph(seed_nodes)
-#     nx.set_edge_attributes(graph, {edge: None for edge in graph.edges}, 'infection_from')
-    
-#     for index in event_data.index:
-#         row = event_data.iloc[index]
-#         source, destination, start, end, duration = tuple(row)
-        
-#         # if source or destination is immune, no transmission
-#         if source in immune_nodes or destination in immune_nodes:
-#             continue
-        
-#         if (start >= graph.nodes[source]['infection_time']) and (np.random.rand() <= p):
-#             # only update if new infection time is smaller than target nodes infection time
-#             if end < graph.nodes[destination]['infection_time']:
-#                 graph.nodes[destination]['infection_time'] = end # update
-                
-#                 # infect an uninfected airport
-#                 graph.get_edge_data(source, destination)['infection_from'] = source
-                
-#     return graph
-
-
-
-
-# def task6():
-#     p = 0.5
-#     seed_nodes = np.random.choice(nodes, 20)
-#     transmission_count = {edge: 0 for edge in G.edges}
-#     # Run 20 simulations using random nodes as seeds and p = 0.5. 
-#     # For each simulation, record which links are used to infect yet uninfected airports.
-#     for i, seed in enumerate(seed_nodes):
-#         if i%5==0:
-#             print(f'{i}/{len(seed_nodes)}')
-        
-#         graph = simulate_infection_2(p, seed_nodes=str(seed), immune_nodes=[])
-    
-#         for edge, source in nx.get_edge_attributes(graph, 'infection_from').items():
-#             if source != None:
-#                 transmission_count[edge] += 1
-
-#     airport = pd.read_csv('US_airport_id_info.csv')
-#     airport.head()
-
-#     xycoords = {str(airport.id[index]):
-#         (airport.xcoordviz[index],airport.ycoordviz[index])
-#         for index in airport.index}
-
-#     edges = list(graph.edges)
-
-#     widths = [transmission_count[edge]/20 for edge in edges]
-
-#     si_animator.plot_network_usa(graph, xycoords, edges=edges, linewidths=widths)
-#     plt.title("Transmission Links")
-#     plt.savefig('result/plot_network_usa.png')
 #-------------- main ------------#
 
 # timestamps
@@ -455,12 +400,6 @@ max_t = float(sorted(air_traffic_GMT, key = lambda x:(x[3]), reverse = True)[0][
 steps = 20
 timestamps = np.linspace(min_t, max_t, steps)
 
-
-# event_data = load_data()
-# event_data.head()
-
-# graph = load_and_init_graph()
-# graph.nodes['0']
 # main 
 #task1()
 #task2()
